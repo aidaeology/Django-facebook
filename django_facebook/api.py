@@ -149,6 +149,8 @@ class FacebookAPI(GraphAPI):
                     self._is_authenticated = False
                     if raise_:
                         raise
+
+        return self._is_authorized
                     
                     
     def facebook_profile_data(self):
