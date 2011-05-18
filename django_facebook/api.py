@@ -73,6 +73,7 @@ class FacebookAPI(GraphAPI):
         self.additional_data = additional_data
 
         self._is_authenticated = None
+        self._is_authorized = None
         self._profile = None
         GraphAPI.__init__(self, access_token)
         
@@ -87,21 +88,24 @@ class FacebookAPI(GraphAPI):
         and
         http://sunilarora.org/parsing-signedrequest-parameter-in-python-bas
         '''
-        l = signed_request.split('.', 2)
-        encoded_sig = l[0]
-        payload = l[1]
+        try:
+            l = signed_request.split('.', 2)
+            encoded_sig = l[0]
+            payload = l[1]
+        except IndexError:
+            raise ValueError("Signed request malformed")
 
         sig = base64_url_decode_php_style(encoded_sig)
         data = json.loads(base64_url_decode_php_style(payload))
     
         if data.get('algorithm').upper() != 'HMAC-SHA256':
-            logger.error('Unknown algorithm')
-            return None
+            logger.error('Signed request is using an unknown algorithm')
+            raise ValueError("Signed request is using an unknown algorithm")
         else:
             expected_sig = hmac.new(secret, msg=payload, digestmod=hashlib.sha256).digest()
     
         if sig != expected_sig:
-            return None
+            raise ValueError("Signed request signature mismatch")
         else:
             logger.debug('valid signed request received..')
             return data
@@ -130,8 +134,23 @@ class FacebookAPI(GraphAPI):
                         raise
 
         return self._is_authenticated
-    
 
+
+    def is_authorized(self, raise_=False):
+        '''
+        Checks if the the user has authorized the application
+        '''
+        if self._is_authorized is None:
+            self._is_authorized = False
+            try:
+                if 'user_id' in self.additional_data:
+                    self._is_authorized = True
+                except GraphAPIError, e:
+                    self._is_authenticated = False
+                    if raise_:
+                        raise
+                    
+                    
     def facebook_profile_data(self):
         '''
         Returns the facebook profile data, together with the image locations
