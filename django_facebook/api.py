@@ -145,10 +145,10 @@ class FacebookAPI(GraphAPI):
             try:
                 if 'user_id' in self.additional_data:
                     self._is_authorized = True
-                except GraphAPIError, e:
-                    self._is_authorized = False
-                    if raise_:
-                        raise
+            except GraphAPIError, e:
+                self._is_authorized = False
+                if raise_:
+                    raise
                     
         return self._is_authorized
                     
