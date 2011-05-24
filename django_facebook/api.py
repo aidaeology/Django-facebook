@@ -30,24 +30,26 @@ def get_facebook_graph(request=None, access_token=None, persistent_token=faceboo
     
     additional_data = None
     facebook_open_graph_cached = False
+    
     if persistent_token:
         facebook_open_graph_cached = request.session.get('facebook_open_graph')
     if facebook_open_graph_cached:
         #TODO: should handle this in class' pickle protocol, but this is easier
         facebook_open_graph_cached._is_authenticated = None
         
-    if not access_token:
-        signed_request = request.REQUEST.get('signed_request')
-        cookie_name = 'fbs_%s' % facebook_settings.FACEBOOK_APP_ID
-        oauth_cookie = request.COOKIES.get(cookie_name)
-        #scenario A, we're on a canvas page and need to parse the signed data
-        if signed_request:
-            additional_data = FacebookAPI.parse_signed_data(signed_request)
-            access_token = additional_data.get('oauth_token')
-        #scenario B, we're using javascript and cookies to authenticate
-        elif oauth_cookie:
-            additional_data = official_sdk.get_user_from_cookie(request.COOKIES, facebook_settings.FACEBOOK_APP_ID, facebook_settings.FACEBOOK_APP_SECRET)
-            access_token = additional_data.get('access_token')
+
+    signed_request = request.REQUEST.get('signed_request')
+    cookie_name = 'fbs_%s' % facebook_settings.FACEBOOK_APP_ID
+    oauth_cookie = request.COOKIES.get(cookie_name)
+    
+    #scenario A, we're on a canvas page and need to parse the signed data
+    if signed_request:
+        additional_data = FacebookAPI.parse_signed_data(signed_request)
+        access_token = additional_data.get('oauth_token')
+    #scenario B, we're using javascript and cookies to authenticate
+    elif oauth_cookie:
+        additional_data = official_sdk.get_user_from_cookie(request.COOKIES, facebook_settings.FACEBOOK_APP_ID, facebook_settings.FACEBOOK_APP_SECRET)
+        access_token = additional_data.get('access_token')
     
     facebook_open_graph = FacebookAPI(access_token, additional_data)
     
@@ -71,9 +73,12 @@ class FacebookAPI(GraphAPI):
     def __init__(self, access_token=None, additional_data=None):
         self.access_token = access_token
         self.additional_data = additional_data
-
+        
         self._is_authenticated = None
         self._is_authorized = None
+        self._page = None
+        self._user =  None
+        self._user_id =  None
         self._profile = None
         GraphAPI.__init__(self, access_token)
         
@@ -136,6 +141,30 @@ class FacebookAPI(GraphAPI):
         return self._is_authenticated
 
 
+    def get_page(self, raise_=False):
+        if 'page' in self.additional_data:
+            try:
+                self._page = self.additional_data.get('page')
+            except GraphAPIError, e:
+                self._page = None
+                if raise_:
+                    raise
+                
+        return self._page
+
+        
+    def get_user(self, raise_=False):
+        if 'user' in self.additional_data:
+            try:
+                self._user = self.additional_data.get('user')
+            except GraphAPIError, e:
+                self._user = None
+                if raise_:
+                    raise
+
+        return self._user
+        
+        
     def is_authorized(self, raise_=False):
         '''
         Checks if the the user has authorized the application
@@ -151,8 +180,22 @@ class FacebookAPI(GraphAPI):
                     raise
                     
         return self._is_authorized
-                    
-                    
+
+                  
+    def pageID(self):
+        if self._page is None:
+            if self.additional_data:
+                try:
+                    self.get_page()
+                except GraphAPIError, e:
+                    self._page = None
+                    if raise_:
+                        raise
+
+        return self._page['id']
+
+        
+    
     def facebook_profile_data(self):
         '''
         Returns the facebook profile data, together with the image locations
