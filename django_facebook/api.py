@@ -194,6 +194,19 @@ class FacebookAPI(GraphAPI):
 
         return self._page['id']
 
+    
+    def userID(self):
+        if self._user_id is None:
+            if self.additional_data:
+                try:
+                    self.is_authorized()
+                except GraphAPIError, e:
+                    self._page = None
+                    if raise_:
+                        raise
+
+        return self._user_id
+
         
     
     def facebook_profile_data(self):
