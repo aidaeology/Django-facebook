@@ -173,6 +173,7 @@ class FacebookAPI(GraphAPI):
             self._is_authorized = False
             try:
                 if 'user_id' in self.additional_data:
+                    self._user_id = self.additional_data.get('user_id')
                     self._is_authorized = True
             except GraphAPIError, e:
                 self._is_authorized = False
@@ -201,7 +202,7 @@ class FacebookAPI(GraphAPI):
                 try:
                     self.is_authorized()
                 except GraphAPIError, e:
-                    self._page = None
+                    self._user_id = None
                     if raise_:
                         raise
 
