@@ -4,11 +4,13 @@ from django.forms.util import ValidationError
 from django.utils import simplejson as json
 from django_facebook import settings as facebook_settings
 from django_facebook.official_sdk import GraphAPI, GraphAPIError
-import datetime
+from datetime import datetime
 import hashlib
 import hmac
 import logging
 import sys
+import time
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -31,41 +33,49 @@ def get_facebook_graph(request=None, access_token=None, persistent_token=faceboo
     
     additional_data = None
     facebook_open_graph_cached = False
-    
+
     if persistent_token:
-        logger.debug('CACHED facebook_open_graph ')
+        logger.debug('Get cached facebook_open_graph ')
         facebook_open_graph_cached = request.session.get('facebook_open_graph')
     if facebook_open_graph_cached:
         #TODO: should handle this in class' pickle protocol, but this is easier
         facebook_open_graph_cached._is_authenticated = None
         
-    signed_request = request.REQUEST.get('signed_request') or request.COOKIES.get('signed_request')
+    signed_request = request.REQUEST.get('signed_request')
     cookie_name = 'fbs_%s' % facebook_settings.FACEBOOK_APP_ID
     oauth_cookie = request.COOKIES.get(cookie_name)
-    
+                
     #scenario A, we're on a canvas page and need to parse the signed data
     if signed_request:
         logger.debug('found signed request..')
         additional_data = FacebookAPI.parse_signed_data(signed_request)
-        logger.debug(additional_data)
+        logger.debug('signed_data: '+str(additional_data))
         access_token = additional_data.get('oauth_token')
     #scenario B, we're using javascript and cookies to authenticate
     elif oauth_cookie:
         logger.debug('found oauth cookie...')
         additional_data = official_sdk.get_user_from_cookie(request.COOKIES, facebook_settings.FACEBOOK_APP_ID, facebook_settings.FACEBOOK_APP_SECRET)
         additional_data["user_id"] = additional_data["uid"]
-        logger.debug(additional_data)
+        logger.debug('oauth cookie: signed_data: '+str(additional_data))
         access_token = additional_data.get('access_token')
     
     facebook_open_graph = FacebookAPI(access_token, additional_data)
-    
+
+
     if facebook_open_graph.access_token and persistent_token:
         logger.debug('storing facebook_open_graph in session..')
         request.session['facebook_open_graph'] = facebook_open_graph
     elif facebook_open_graph_cached:
+        logger.debug('Using cached facebook_open_graph ')
         facebook_open_graph = facebook_open_graph_cached
 
-        
+
+    # Check if the OAuth token has expired
+    if facebook_open_graph.additional_data.has_key('expires'):
+        if datetime.fromtimestamp(float(facebook_open_graph.additional_data['expires'])) < datetime.now():
+            logger.debug('FB Access token expired, revalidate!')
+            facebook_open_graph._is_authenticated = None
+
     return facebook_open_graph
 
 
